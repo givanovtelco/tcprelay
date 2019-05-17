@@ -107,7 +107,6 @@ int EventQueue::conf_listeners(const std::vector<int>& sockets, const std::vecto
 
 int EventQueue::spawn_listeners(const std::vector<uint16_t>& ports, std::vector<int>& sockets)
 {
-	assert(ports.size() == sockets.size());
 
 	struct sockaddr_in saddr;
 	memset(&saddr, 0, sizeof(sockaddr_in));
