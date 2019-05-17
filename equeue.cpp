@@ -5,6 +5,7 @@
 #include <fcntl.h>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <signal.h>
 #include <sys/ioctl.h>
 #include <sys/epoll.h>
@@ -18,7 +19,7 @@
 #include "relay.h"
 
 #define MAX_EVENTS 2048
-
+#define MAX_BUFF 2048
 struct events
 {
 	int _fd;
@@ -28,7 +29,7 @@ struct events
 };
 
 EventQueue::EventQueue(const relay& params)
-	:_params(params)
+:_params(params)
 {
 	_evs = new events;
 }
@@ -36,7 +37,7 @@ EventQueue::EventQueue(const relay& params)
 int EventQueue::init()
 {
 	if ((_evs->_fd = epoll_create1(0)) < 0)
-			return -1;
+		return -1;
 
 	sigset_t sigset;
 	if (sigemptyset(&sigset))
@@ -76,7 +77,7 @@ int EventQueue::init_sockets()
 		event._fd = elem;
 		event._state = LISTENER;
 		event._fn = [this](int arg) -> int {
-				return accept_upstream(arg);
+			return this->accept_upstream(arg);
 		};
 		cbs.push_back(event);
 	}
@@ -95,6 +96,12 @@ EventQueue::~EventQueue()
 int EventQueue::conf_listeners(const std::vector<int>& sockets, const std::vector<evdata>& cbs)
 {
 
+	assert(sockets.size() == cbs.size());
+	int sz = sockets.size();
+	for (int i = 0; i < sz; i++)
+	{
+
+	}
 	return 0;
 }
 
@@ -106,7 +113,7 @@ int EventQueue::spawn_listeners(const std::vector<uint16_t>& ports, std::vector<
 	memset(&saddr, 0, sizeof(sockaddr_in));
 	saddr.sin_family = AF_INET;
 	saddr.sin_addr.s_addr = inet_addr(_params._addr);
-	
+
 	int sz = ports.size();
 
 	for (int i = 0; i < sz; i++)
@@ -127,7 +134,7 @@ int EventQueue::spawn_listeners(const std::vector<uint16_t>& ports, std::vector<
 
 		sockets.push_back(sock);
 	}
-	
+
 	return 0;
 }
 
@@ -147,8 +154,8 @@ void EventQueue::dispatch()
 		int fd = user->_fd;
 
 		if (ev.events & EPOLLERR ||
-			ev.events & EPOLLHUP ||
-			(!ev.events & EPOLLIN) )
+				ev.events & EPOLLHUP ||
+				(!ev.events & EPOLLIN) )
 		{
 			shutdown(user->_fd, SHUT_RDWR);
 			continue;
@@ -163,10 +170,10 @@ void EventQueue::dispatch()
 
 int EventQueue::add_event(int fd, const evdata& data)
 {
-  	struct epoll_event ev;
-  	memmove(ev.data.ptr, (evdata *)&data, sizeof(data));
-  	ev.events = EPOLLIN | EPOLLET;
-  	return epoll_ctl(_evs->_fd, EPOLL_CTL_ADD, fd, &ev);
+	struct epoll_event ev;
+	memmove(ev.data.ptr, (evdata *)&data, sizeof(data));
+	ev.events = EPOLLIN | EPOLLET;
+	return epoll_ctl(_evs->_fd, EPOLL_CTL_ADD, fd, &ev);
 }
 
 int EventQueue::destroy_event(int fd_event)
@@ -186,34 +193,134 @@ int EventQueue::make_nonblocking(int fd)
 {
 	int flags, s;
 
-    flags = fcntl(fd, F_GETFL, 0);
-    if (flags == -1)
-      return -1;
+	flags = fcntl(fd, F_GETFL, 0);
+	if (flags == -1)
+		return -1;
 
-    flags |= O_NONBLOCK;
-    s = fcntl(fd, F_SETFL, flags);
-    if (s == -1)
-      return -1;
+	flags |= O_NONBLOCK;
+	s = fcntl(fd, F_SETFL, flags);
+	if (s == -1)
+		return -1;
 
-    return 0;
+	return 0;
 }
 
 int EventQueue::accept_upstream(int fd)
 {
+	struct sockaddr in_addr;
+	socklen_t in_len;
+	int infd;
 
+	in_len = sizeof(in_addr);
+	infd = accept(fd, &in_addr, &in_len);
+
+	if (infd < 0)
+		return -1;
+
+	int zero = 1;
+	setsockopt(infd, SOL_SOCKET, SO_ZEROCOPY, &zero, sizeof(zero));
+
+	int alive = 1;
+	setsockopt(infd, SOL_SOCKET, SO_KEEPALIVE, &alive, sizeof(alive));
+	int idle = 1;
+	setsockopt(infd, IPPROTO_TCP, TCP_KEEPIDLE, &idle, sizeof(idle));
+	int interval = 5;
+	setsockopt(infd, IPPROTO_TCP, TCP_KEEPINTVL, &interval, sizeof(interval));
+
+	struct evdata ev;
+	ev._fd = infd;
+	ev._state = PRODUCER;
+	ev._fn = [this](int arg) -> int { return this->forward_downstream(arg); };
+
+	if (_mutils.add_upstream(infd))
+		return -1;
+
+	if (add_event(infd, ev))
+		return -1;
+
+	return 0;
 }
 
 int EventQueue::accept_downstream(int fd)
 {
+	struct sockaddr in_addr;
+	socklen_t in_len;
+	int infd;
 
+	in_len = sizeof(in_addr);
+	infd = accept(fd, &in_addr, &in_len);
+
+	if (infd < 0)
+		return -1;
+
+	int zero = 1;
+	setsockopt(infd, SOL_SOCKET, SO_ZEROCOPY, &zero, sizeof(zero));
+
+	struct evdata ev;
+	ev._fd = infd;
+	ev._state = PRODUCER;
+	ev._fn = [this](int arg) -> int { return this->forward_upstream(arg); };
+
+	if (_mutils.add_downstream(infd))
+		return -1;
+
+	if (add_event(infd, ev))
+		return -1;
+
+	return 0;
 }
 
 int EventQueue::forward_upstream(int fd)
 {
+	int upfd = -1;
+	if ((upfd  = _mutils.add_upstream(fd)) == -1)
+		return -1;
 
+	if (do_forward(fd, upfd))
+		return -1;
+
+	return 0;
 }
 
 int EventQueue::forward_downstream(int fd)
 {
+	int downfd = -1;
+	if ((downfd  = _mutils.add_upstream(fd)) == -1)
+		return -1;
 
+	if (do_forward(fd, downfd))
+		return -1;
+
+	return 0;
+}
+
+int EventQueue::do_forward(int src, int dst)
+{
+	char buf[MAX_BUFF];
+	struct cmsghdr *cmsg;
+	struct msghdr msg;
+	struct iovec vec[1];
+	struct sockaddr_in sin;
+	memset(&msg,   0, sizeof(msg));
+	memset(vec,    0, sizeof(vec));
+	memset(buf, 0, sizeof(buf));
+
+	vec[0].iov_base = buf;
+	vec[0].iov_len  = sizeof(buf);
+	msg.msg_name = &sin;
+	msg.msg_namelen = sizeof(sin);
+	msg.msg_iov     = vec;
+	msg.msg_iovlen  = 1;
+	msg.msg_control = 0;
+	msg.msg_controllen = 0;
+
+	int len = recvmsg(src, &msg, 0);
+
+	if (len == -1)
+		return -1;
+
+	if (sendmsg(dst, &msg, MSG_ZEROCOPY) == -1)
+		return -1;
+
+	return 0;
 }

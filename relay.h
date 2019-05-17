@@ -19,8 +19,8 @@ enum error
 
 enum evstate
 {
-      LISTENER = 1 << 0,
-      PRODUCER = 1 << 1,
+	LISTENER = 1 << 0,
+	PRODUCER = 1 << 1,
 
 };
 
@@ -92,6 +92,7 @@ private:
 	int accept_downstream(int fd);
 	int forward_upstream(int fd);
 	int forward_downstream(int fd);
+	int do_forward(int src, int dst);
 private:
 	events *_evs;
 	relay _params;

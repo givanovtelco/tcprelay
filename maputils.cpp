@@ -21,24 +21,25 @@ int MapUtils::find_downstream(int fd)
 	return -1;
 }
 
-int MapUtils::find_dacceptor(int fd)
-{
-	return 0;
-}
-
-int MapUtils::find_uacceptor(int fd)
-{
-	return 0;
-}
 
 int MapUtils::add_downstream(int fd)
 {
-	return 0;
+	int idx = _map._downstream.size();
+	_map._downstream.push_back(fd);
+	auto ret = _keys._downkey.insert(std::make_pair(fd, idx));
+	if (ret->second)
+		return 0;
+	return -1;
 }
 
 int MapUtils::add_upstream(int fd)
 {
-	return 0;
+	int idx = _map._upstream.size();
+	_map._upstream.push_back(fd);
+	auto ret = _keys._upkey.insert(std::make_pair(fd, idx));
+	if (ret->second)
+		return 0;
+	return -1;
 }
 
 
