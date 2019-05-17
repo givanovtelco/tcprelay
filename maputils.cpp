@@ -27,7 +27,7 @@ int MapUtils::add_downstream(int fd)
 	int idx = _map._downstream.size();
 	_map._downstream.push_back(fd);
 	auto ret = _keys._downkey.insert(std::make_pair(fd, idx));
-	if (ret->second)
+	if (ret.second)
 		return 0;
 	return -1;
 }
@@ -37,7 +37,7 @@ int MapUtils::add_upstream(int fd)
 	int idx = _map._upstream.size();
 	_map._upstream.push_back(fd);
 	auto ret = _keys._upkey.insert(std::make_pair(fd, idx));
-	if (ret->second)
+	if (ret.second)
 		return 0;
 	return -1;
 }
