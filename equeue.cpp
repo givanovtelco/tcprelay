@@ -227,6 +227,7 @@ void EventQueue::stop()
 	}
 	close(_evs->_fd);
 	close(_evs->_sfd);
+	unlink(_params._cfg);
 }
 
 int EventQueue::make_nonblocking(int fd)
