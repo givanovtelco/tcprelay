@@ -63,11 +63,12 @@ int main(int argc, char *argv[])
 	uint32_t maxconn = 1024;
 	const char *ports = NULL;
 	const char *addr = NULL;
+	const char *sockpath = "./cfg.sock";
 
 	relay rlparams;
 	memset(&rlparams, 0, sizeof(rlparams));
 
-	const char *sockpath = "./cfg.sock";
+
 
 	for (int idx = 1; idx < argc; idx++)
 	{
@@ -99,18 +100,18 @@ int main(int argc, char *argv[])
 	if (!inet_pton(AF_INET, rlparams._addr, &(sa.sin_addr)))
 		help();
 
-	pid_t pid;
-
-	pid = fork();
-
-	if (pid < 0)
-		exit(EXIT_FAILURE);
-
-	if (pid > 0)
-		exit(EXIT_SUCCESS);
-
-	if (setsid() < 0)
-		exit(EXIT_FAILURE);
+//	pid_t pid;
+//
+//	pid = fork();
+//
+//	if (pid < 0)
+//		exit(EXIT_FAILURE);
+//
+//	if (pid > 0)
+//		exit(EXIT_SUCCESS);
+//
+//	if (setsid() < 0)
+//		exit(EXIT_FAILURE);
 
 	struct sigaction l_sa;
 
@@ -132,13 +133,13 @@ int main(int argc, char *argv[])
 	// ignore SIGPIPE
 	signal(SIGPIPE, SIG_IGN);
 
-	pid = fork();
-
-	if (pid < 0)
-		exit(EXIT_FAILURE);
-
-	if (pid > 0)
-		exit(EXIT_SUCCESS);
+//	pid = fork();
+//
+//	if (pid < 0)
+//		exit(EXIT_FAILURE);
+//
+//	if (pid > 0)
+//		exit(EXIT_SUCCESS);
 
 	/* Set new file permissions */
 	umask(0);
@@ -166,6 +167,7 @@ int main(int argc, char *argv[])
 		tok = strtok(NULL, sep);
 	}
 
+	strncpy(rlparams._cfg, sockpath, SUN_PATH);
 	EventQueue queue(rlparams);
 	if (queue.init())
 		return -1;

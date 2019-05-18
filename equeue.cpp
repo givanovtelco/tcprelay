@@ -8,6 +8,7 @@
 #include <netinet/tcp.h>
 #include <signal.h>
 #include <sys/ioctl.h>
+#include <sys/un.h>
 #include <sys/epoll.h>
 #include <sys/signalfd.h>
 #include <sys/sendfile.h>
@@ -20,6 +21,7 @@
 
 #define MAX_EVENTS 2048
 #define MAX_BUFF 2048
+
 struct events
 {
 	int _fd;
@@ -49,16 +51,40 @@ int EventQueue::init()
 	if ((_evs->_sfd = signalfd(-1, &sigset, 0)) < 0)
 		return -1;
 
-	evdata userdata;
-	userdata._fd = _evs->_sfd;
-	userdata._state = LISTENER;
-	userdata._fn = nullptr;
+	evdata *userdata = new evdata;
+	userdata->_fd = _evs->_sfd;
+	userdata->_state = LISTENER;
+	userdata->_fn = nullptr;
 
 	if (add_event(_evs->_sfd, userdata))
 		return -1;
 
 	if (init_sockets())
 		return -1;
+
+	if (spawn_config())
+		return -1;
+
+	return 0;
+}
+
+int EventQueue::spawn_config()
+{
+	struct sockaddr_un addr;
+	memset(&addr, 0, sizeof(addr));
+	addr.sun_family = AF_UNIX;
+	strncpy(addr.sun_path, _params._cfg, SUN_PATH);
+
+	if ( (_cfd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1)
+		return -1;
+
+	if (bind(_cfd, (struct sockaddr*)&addr, sizeof(addr)) == -1)
+		return -1;
+
+	if (listen(_cfd, 1) == -1)
+		return -1;
+
+	add_event(_cfd, nullptr);
 
 	return 0;
 }
@@ -147,30 +173,42 @@ void EventQueue::dispatch()
 		epoll_event ev = _evs->_maxev[i];
 		evdata *user = (evdata*)ev.data.ptr;
 
-		if (!user)
-			continue;
-
-		int fd = user->_fd;
+		int fd;
+		if (user)
+			fd = user->_fd;
+		else
+			fd = ev.data.fd;
 
 		if (ev.events & EPOLLERR ||
 				ev.events & EPOLLHUP ||
 				(!ev.events & EPOLLIN) )
 		{
-			shutdown(user->_fd, SHUT_RDWR);
+			// TODO: unmap connection
+			shutdown(fd, SHUT_RDWR);
 			continue;
-		} 
+		}
 
 		if (fd == _evs->_sfd)
 			return; // exit signal from the main thread.
+
+		if (fd == _cfd)
+		{
+			int cfd = accept(_cfd, NULL, NULL);
+			if (cfd < 0)
+				continue;
+			make_nonblocking(cfd);
+			add_event(cfd, nullptr);
+			_cpending.push(cfd);
+		}
 
 		user->_fn(fd);
 	}
 }
 
-int EventQueue::add_event(int fd, const evdata& data)
+int EventQueue::add_event(int fd,  evdata* data)
 {
 	struct epoll_event ev;
-	memmove(ev.data.ptr, (evdata *)&data, sizeof(data));
+	ev.data.ptr = data;
 	ev.events = EPOLLIN | EPOLLET;
 	return epoll_ctl(_evs->_fd, EPOLL_CTL_ADD, fd, &ev);
 }
@@ -182,8 +220,11 @@ int EventQueue::destroy_event(int fd_event)
 
 void EventQueue::stop()
 {
-	for (auto &elem : _evs->_maxev)
+	for (auto &elem : _evs->_maxev) {
 		destroy_event(elem.data.fd);
+		if (elem.data.ptr)
+			delete static_cast<evdata*>(elem.data.ptr);
+	}
 	close(_evs->_fd);
 	close(_evs->_sfd);
 }
@@ -226,10 +267,10 @@ int EventQueue::accept_upstream(int fd)
 	int interval = 5;
 	setsockopt(infd, IPPROTO_TCP, TCP_KEEPINTVL, &interval, sizeof(interval));
 
-	struct evdata ev;
-	ev._fd = infd;
-	ev._state = PRODUCER;
-	ev._fn = [this](int arg) -> int { return this->forward_downstream(arg); };
+	evdata *ev =  new evdata;
+	ev->_fd = infd;
+	ev->_state = PRODUCER;
+	ev->_fn = [this](int arg) -> int { return this->forward_downstream(arg); };
 
 	if (_mutils.add_upstream(infd))
 		return -1;
@@ -255,10 +296,10 @@ int EventQueue::accept_downstream(int fd)
 	int zero = 1;
 	setsockopt(infd, SOL_SOCKET, SO_ZEROCOPY, &zero, sizeof(zero));
 
-	struct evdata ev;
-	ev._fd = infd;
-	ev._state = PRODUCER;
-	ev._fn = [this](int arg) -> int { return this->forward_upstream(arg); };
+	evdata *ev = new evdata;
+	ev->_fd = infd;
+	ev->_state = PRODUCER;
+	ev->_fn = [this](int arg) -> int { return this->forward_upstream(arg); };
 
 	if (_mutils.add_downstream(infd))
 		return -1;

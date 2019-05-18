@@ -4,8 +4,13 @@
 #include <vector>
 #include <unordered_map>
 #include <functional>
+#include <queue>
+#include <cstdarg>
+
+#include <limits.h>
 
 #define ADDRLEN 46
+#define SUN_PATH 108 /* based on sys/un.h structure */
 
 struct events;
 
@@ -52,6 +57,7 @@ struct listeners
 struct relay
 {
 	char _addr[ADDRLEN];
+	char _cfg[PATH_MAX];
 	std::vector<uint16_t> _clports;
 	std::vector<uint16_t> _srvports;
 };
@@ -72,6 +78,13 @@ private:
 	bdkeys _keys;
 };
 
+class CfgUtils
+{
+public:
+	CfgUtils() = default;
+	int parse_cmd(const char *src, int slen, char *dst, int dlen);
+};
+
 class EventQueue
 {
 public:
@@ -81,11 +94,12 @@ public:
 	// infinite loop
 	void dispatch();
 	void stop();
-	int add_event(int fd, const evdata& udata);
+	int add_event(int fd, evdata* udata);
 	int destroy_event(int fd_event);
 	int make_nonblocking(int fd);
 private:
 	int init_sockets();
+	int spawn_config();
 	int spawn_listeners(const std::vector<uint16_t>& ports,std::vector<int>& sockets);
 	int conf_listeners(const std::vector<int>& sockets, const std::vector<evdata>& cbs);
 	int accept_upstream(int fd);
@@ -94,8 +108,11 @@ private:
 	int forward_downstream(int fd);
 	int do_forward(int src, int dst);
 private:
+	int _cfd;
+	std::queue<int> _cpending;
 	events *_evs;
 	relay _params;
 	MapUtils _mutils;
+	CfgUtils _cutils;
 };
 #endif
