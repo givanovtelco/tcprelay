@@ -1,5 +1,5 @@
-#ifndef THREAD_POOL_HPP__
-#define THREAD_POOL_HPP__
+#ifndef THREAD_POOL_H__
+#define THREAD_POOL_H__
 
 #include <functional>
 #include <future>
@@ -13,27 +13,27 @@ class ThreadPool {
 private:
     class ThreadWorker {
     private:
-        int m_id;
-        ThreadPool * m_pool;
+        int _id;
+        ThreadPool * _pool;
     public:
         ThreadWorker(ThreadPool * pool, const int id)
-            : m_pool(pool), m_id(id) {
+            : _pool(pool), _id(id) {
         }
         
         void operator()() {
-            std::function<void()> func;
+            std::function<void ()> func;
             bool pop;
-            while (!m_pool->m_shutdown) {
+            while (!_pool->_shutdown) {
                 {
-                    std::unique_lock<std::mutex> lock(m_pool->m_conditional_mutex);
-                    if (m_pool->m_queue.empty()) {
-                        m_pool->m_conditional_lock.wait(lock);
+                    std::unique_lock<std::mutex> lock(_pool->_conditional_mutex);
+                    if (_pool->_queue.empty()) {
+                        _pool->_conditional_lock.wait(lock);
                     }
 
                     // double check in case of shutdown
-                    if (!m_pool->m_queue.empty()) {
-                        func = std::move(m_pool->m_queue.front());
-                        m_pool->m_queue.pop();
+                    if (!_pool->_queue.empty()) {
+                        func = std::move(_pool->_queue.front());
+                        _pool->_queue.pop();
                         func();
                     }
                 }
@@ -56,32 +56,32 @@ public:
     
     template<typename F, typename...Args>
     auto push(F&& f, Args&&... args) -> std::future<decltype(f(args...))> {
-	std::lock_guard<std::mutex> lock(m_jobmtx);
+	std::lock_guard<std::mutex> lock(_jobmtx);
         // Create a function with bounded parameters ready to execute
         std::function<decltype(f(args...))()> func = std::bind(std::forward<F>(f), std::forward<Args>(args)...);
         // Encapsulate it into a shared ptr in order to be able to copy construct / assign 
         auto task_ptr = std::make_shared<std::packaged_task<decltype(f(args...))()>>(func);
         
         // Wrap packaged task into void function
-        std::function<void()> wrapper_func = [task_ptr]() {
+        std::function<void ()> wrapper_func = [task_ptr]() {
             (*task_ptr)();
         };
         
-        m_queue.push(std::move(wrapper_func));
+        _queue.push(std::move(wrapper_func));
         
         // Wake up one thread if its waiting
-        m_conditional_lock.notify_one();
+        _conditional_lock.notify_one();
         
         // Return future from promise
         return task_ptr->get_future();
     }
 private: 
-    bool m_shutdown;
-    std::queue<std::function<void()>> m_queue;
-    std::vector<std::thread> m_threads;
-    std::mutex m_conditional_mutex;
-    std::mutex m_jobmtx;
-    std::condition_variable m_conditional_lock;
+    bool _shutdown;
+    std::queue<std::function<void ()>> _queue;
+    std::vector<std::thread> _threads;
+    std::mutex _conditional_mutex;
+    std::mutex _jobmtx;
+    std::condition_variable _conditional_lock;
 };
 
 #endif

@@ -37,7 +37,7 @@ static void help()
 			"\t\tapp ports separated with comma\n");
 
 	printf(
-			"\t--sock=./cfg.sock\n"
+			"\t--sock=/full/path/to/cfg.sock\n"
 			"\t\tconfig socket path file\n");
 
 	printf(
@@ -63,7 +63,7 @@ int main(int argc, char *argv[])
 	uint32_t maxconn = 1024;
 	const char *ports = NULL;
 	const char *addr = NULL;
-	const char *sockpath = "./cfg.sock";
+	const char *sockpath = "/var/run/tcprelay.sock";
 
 	relay rlparams;
 	memset(&rlparams, 0, sizeof(rlparams));
@@ -168,6 +168,7 @@ int main(int argc, char *argv[])
 	}
 
 	strncpy(rlparams._cfg, sockpath, SUN_PATH);
+
 	EventQueue queue(rlparams);
 	if (queue.init())
 		return -1;

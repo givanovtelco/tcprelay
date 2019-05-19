@@ -18,6 +18,7 @@
 #include <cassert>
 
 #include "relay.h"
+#include "threadpool.h"
 
 #define MAX_EVENTS 2048
 #define MAX_BUFF 2048
@@ -34,6 +35,9 @@ EventQueue::EventQueue(const relay& params)
 :_params(params)
 {
 	_evs = new events;
+	_tpool = new ThreadPool(std::thread::hardware_concurrency() + 1);
+    _tpool->init();
+
 }
 
 int EventQueue::init()
@@ -62,13 +66,13 @@ int EventQueue::init()
 	if (init_sockets())
 		return -1;
 
-	if (spawn_config())
+	if (init_config())
 		return -1;
 
 	return 0;
 }
 
-int EventQueue::spawn_config()
+int EventQueue::init_config()
 {
 	struct sockaddr_un addr;
 	memset(&addr, 0, sizeof(addr));
@@ -95,14 +99,14 @@ int EventQueue::init_sockets()
 	if (spawn_listeners(_params._srvports, srvfds))
 		return -1;
 
-	std::vector<evdata> cbs;
+	std::vector<evdata*> cbs;
 
 	for (const auto &elem : srvfds)
 	{
-		evdata event;
-		event._fd = elem;
-		event._state = LISTENER;
-		event._fn = [this](int arg) -> int {
+		evdata *event = new evdata;
+		event->_fd = elem;
+		event->_state = LISTENER;
+		event->_fn = [this](int arg) -> int {
 			return this->accept_upstream(arg);
 		};
 		cbs.push_back(event);
@@ -119,15 +123,14 @@ EventQueue::~EventQueue()
 	delete _evs;
 }
 
-int EventQueue::conf_listeners(const std::vector<int>& sockets, const std::vector<evdata>& cbs)
+int EventQueue::conf_listeners(const std::vector<int>& sockets, const std::vector<evdata*>& cbs)
 {
 
 	assert(sockets.size() == cbs.size());
 	int sz = sockets.size();
 	for (int i = 0; i < sz; i++)
-	{
+		add_event(sockets[i], cbs[i]);
 
-	}
 	return 0;
 }
 
@@ -196,17 +199,17 @@ void EventQueue::dispatch()
 			int cfd = accept(_cfd, NULL, NULL);
 			if (cfd < 0)
 				continue;
-			make_nonblocking(cfd);
 			add_event(cfd, nullptr);
 			_cpending.push(cfd);
 		}
 
-		user->_fn(fd);
+		_tpool->push([this, user, fd]() mutable {user->_fn(fd); });
 	}
 }
 
 int EventQueue::add_event(int fd,  evdata* data)
 {
+	make_nonblocking(fd);
 	struct epoll_event ev;
 	ev.data.ptr = data;
 	ev.events = EPOLLIN | EPOLLET;

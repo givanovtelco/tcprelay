@@ -13,6 +13,7 @@
 #define SUN_PATH 108 /* based on sys/un.h structure */
 
 struct events;
+class ThreadPool;
 
 enum error
 {
@@ -99,9 +100,9 @@ public:
 	int make_nonblocking(int fd);
 private:
 	int init_sockets();
-	int spawn_config();
-	int spawn_listeners(const std::vector<uint16_t>& ports,std::vector<int>& sockets);
-	int conf_listeners(const std::vector<int>& sockets, const std::vector<evdata>& cbs);
+	int init_config();
+	int spawn_listeners(const std::vector<uint16_t>& ports, std::vector<int>& sockets);
+	int conf_listeners(const std::vector<int>& sockets, const std::vector<evdata*>& cbs);
 	int accept_upstream(int fd);
 	int accept_downstream(int fd);
 	int forward_upstream(int fd);
@@ -111,6 +112,7 @@ private:
 	int _cfd;
 	std::queue<int> _cpending;
 	events *_evs;
+	ThreadPool *_tpool;
 	relay _params;
 	MapUtils _mutils;
 	CfgUtils _cutils;
