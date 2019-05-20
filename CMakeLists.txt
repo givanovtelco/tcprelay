@@ -9,7 +9,13 @@ find_package (Threads)
 
 add_executable(tcprelay main.cpp equeue.cpp maputils.cpp threadpool.cpp cfg.cpp)
 target_link_libraries (tcprelay ${CMAKE_THREAD_LIBS_INIT})
-add_library(libsrv STATIC srvlib/connpool.cpp)
+add_library(srv STATIC srvlib/connpool.cpp)
 add_executable(tcprelayctl cli/tcprelayctl.cpp)
-add_executable(echo_server server/server.cpp)
+add_executable(echoserver server/server.cpp)
+target_include_directories(
+    echoserver PUBLIC
+    srvlib
+    )
+target_link_libraries(echoserver ${PROJECT_BINARY_DIR}/libsrv.a)
+add_dependencies(echoserver srv)
 
