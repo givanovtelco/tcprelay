@@ -55,6 +55,12 @@ struct listeners
 	std::vector<int> _cli;
 };
 
+struct lkeys
+{
+	std::unordered_map<int, int> _lup;
+	std::unordered_map<int, int> _ldown;
+};
+
 struct relay
 {
 	char _addr[ADDRLEN];
@@ -71,12 +77,17 @@ public:
 	int find_downstream(int fd);
 	int find_dacceptor(int fd);
 	int find_uacceptor(int fd);
+	int add_uacceptor(int fd);
+	int add_dacceptor(int fd);
 	int add_downstream(int fd);
 	int add_upstream(int fd);
+	int del_upstream(int fd);
+	int del_downstream(int fd);
 private:
-	listeners _lscoks;
+	listeners _lsocks;
 	connmap _map;
 	bdkeys _keys;
+	lkeys _lkeys;
 };
 
 class CfgUtils

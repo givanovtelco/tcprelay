@@ -208,7 +208,12 @@ void EventQueue::dispatch()
 			_cpending.push(cfd);
 		}
 
-		user->_fn(fd);
+		int ret = user->_fn(fd);
+		if (ret < 0)
+		{
+			destroy_event(fd);
+			delete user;
+		}
 	}
 }
 
