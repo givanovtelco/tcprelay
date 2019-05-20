@@ -134,6 +134,11 @@ int EventQueue::conf_listeners(const std::vector<int>& sockets, const std::vecto
 	return 0;
 }
 
+int EventQueue::spawn_client(uint16_t port)
+{
+	return 0;
+}
+
 int EventQueue::spawn_listeners(const std::vector<uint16_t>& ports, std::vector<int>& sockets)
 {
 
@@ -203,7 +208,7 @@ void EventQueue::dispatch()
 			_cpending.push(cfd);
 		}
 
-		_tpool->push([this, user, fd]() mutable {user->_fn(fd); });
+		user->_fn(fd);
 	}
 }
 
@@ -252,14 +257,26 @@ int EventQueue::make_nonblocking(int fd)
 int EventQueue::accept_upstream(int fd)
 {
 	struct sockaddr in_addr;
+	struct sockaddr_in sinfo;
+	socklen_t len = sizeof(sockaddr_in);
+
 	socklen_t in_len;
 	int infd;
 
 	in_len = sizeof(in_addr);
 	infd = accept(fd, &in_addr, &in_len);
 
+
 	if (infd < 0)
 		return -1;
+
+	memset(&sinfo, 0, sizeof(sockaddr_in));
+
+	uint16_t port;
+
+	if (getsockname(fd, (struct sockaddr *)&sinfo, &len) == -1)
+		return -1;
+	port = htons(sinfo.sin_port);
 
 	int zero = 1;
 	setsockopt(infd, SOL_SOCKET, SO_ZEROCOPY, &zero, sizeof(zero));
@@ -281,6 +298,9 @@ int EventQueue::accept_upstream(int fd)
 
 	if (add_event(infd, ev))
 		return -1;
+
+	if (_mutils.find_downstream(infd))
+		spawn_client(port);
 
 	return 0;
 }
@@ -316,26 +336,31 @@ int EventQueue::accept_downstream(int fd)
 
 int EventQueue::forward_upstream(int fd)
 {
-	int upfd = -1;
-	if ((upfd  = _mutils.add_upstream(fd)) == -1)
-		return -1;
+	auto res = _tpool->push([this, fd]() mutable {
+		int upfd = -1;
+		if ((upfd  = _mutils.add_upstream(fd)) == -1)
+			return -1;
+		if (do_forward(fd, upfd))
+			return -1;
+		return 0;
+	});
 
-	if (do_forward(fd, upfd))
-		return -1;
-
-	return 0;
+	return res.get();
 }
 
 int EventQueue::forward_downstream(int fd)
 {
-	int downfd = -1;
-	if ((downfd  = _mutils.add_upstream(fd)) == -1)
-		return -1;
+	auto res = _tpool->push([this, fd]() mutable {
+		int downfd = -1;
+		if ((downfd  = _mutils.add_upstream(fd)) == -1)
+			return -1;
 
-	if (do_forward(fd, downfd))
-		return -1;
+		if (do_forward(fd, downfd))
+			return -1;
 
-	return 0;
+		return 0;
+	});
+	return res.get();
 }
 
 int EventQueue::do_forward(int src, int dst)

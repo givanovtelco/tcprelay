@@ -103,6 +103,8 @@ private:
 	int init_config();
 	int spawn_listeners(const std::vector<uint16_t>& ports, std::vector<int>& sockets);
 	int conf_listeners(const std::vector<int>& sockets, const std::vector<evdata*>& cbs);
+	int spawn_client(uint16_t port);
+private:
 	int accept_upstream(int fd);
 	int accept_downstream(int fd);
 	int forward_upstream(int fd);
