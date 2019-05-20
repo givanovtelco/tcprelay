@@ -6,6 +6,7 @@
 #include <sys/stat.h>
 #include <arpa/inet.h>
 #include <signal.h>
+#include <syslog.h>
 
 #include "relay.h"
 
@@ -153,7 +154,6 @@ int main(int argc, char *argv[])
 	{
 		close(x);
 	}
-
 
 	const char sep[2] = ",";
 	char *tok;
