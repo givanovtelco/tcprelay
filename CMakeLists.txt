@@ -1,10 +1,13 @@
 cmake_minimum_required (VERSION 2.6)
-project (Median)
+SET(CMAKE_INSTALL_PREFIX /opt/tcprelay)
 
-set (Median_VERSION_MAJOR 1)
-set (Median_VERSION_MINOR 0)
+project (tcprelay)
+
+set (tcprelay_VERSION_MAJOR 1)
+set (tcprelay_VERSION_MINOR 0)
 
 SET(CMAKE_CXX_COMPILER /usr/bin/c++)  
+
 find_package (Threads)
 
 add_executable(tcprelay main.cpp equeue.cpp maputils.cpp threadpool.cpp cfg.cpp)
