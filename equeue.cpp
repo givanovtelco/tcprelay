@@ -311,17 +311,15 @@ int EventQueue::cfg_execute(int fd)
 	if (bytes == 0)
 		return -1;
 
-	int out[1024];
-	if (!_cutils.parse_cmd(buf, sizeof(buf), out, sizeof(out)))
+	int port;
+	if (!_cutils.parse_cmd(buf, sizeof(buf), &port))
 	{
-		int sz = sizeof(out);
-		for (int i = 0; i < sz; i++)
+		if (isdigit(port))
 		{
-			int c = out[i];
-			if (isdigit(c))
-			{
-				spawn_client(c);
-			}
+			//spawn_client(port);
+			int pport = port + _params._prefix;
+			// TODO: spawn serverport, persist client port.
+
 		}
 	}
 

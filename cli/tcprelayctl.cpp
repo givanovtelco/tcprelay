@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <stdint.h>
 #include <fcntl.h>
 #include <string.h>
 #include <errno.h>
@@ -17,8 +18,8 @@ static void help()
 			"\t\tshows this screen\n");
 
 	printf(
-			"\t--ports=20,22,80\n"
-			"\t\tapp ports separated with comma\n");
+			"\t--port=20\n"
+			"\t\tapp port\n");
 
 	printf(
 			"\t--sock=/full/path/to/cfg.sock\n"
@@ -35,7 +36,7 @@ int main(int argc, char *argv[])
 {
 	struct sockaddr_un addr;
 	const char *sockpath = NULL;
-	const char *ports = NULL;
+	uint16_t port = 0;
 	const char *cmd = "add";
 
 	int fd;
@@ -46,9 +47,9 @@ int main(int argc, char *argv[])
 		if (!strcmp(argv[idx], "--help"))
 			help();
 
-		int len = strlen("--ports=");
-		if (!strncmp(argv[idx], "--ports=", len))
-			ports = argv[idx] + len;
+		int len = strlen("--port=");
+		if (!strncmp(argv[idx], "--port=", len))
+			port = atoi(argv[idx] + len);
 
 		len = strlen("--command=");
 		if (!strncmp(argv[idx], "--command=", len))
@@ -59,7 +60,7 @@ int main(int argc, char *argv[])
 			sockpath = argv[idx] + len;
 	}
 
-	if (!sockpath || !ports)
+	if (!sockpath || !port)
 		help();
 
 	if ( (fd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1)
@@ -88,7 +89,7 @@ int main(int argc, char *argv[])
 	}
 
 	char buf[1024];
-	snprintf(buf, sizeof(buf), "%s %s", cmd, ports);
+	snprintf(buf, sizeof(buf), "%s %d", cmd, port);
 
 	int bytes = send(fd, buf, sizeof(buf), MSG_DONTWAIT);
 
@@ -124,6 +125,3 @@ int main(int argc, char *argv[])
 
 	return 0;
 }
-
-
-

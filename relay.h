@@ -63,10 +63,11 @@ struct lkeys
 
 struct relay
 {
-	char _addr[ADDRLEN];
-	char _cfg[PATH_MAX];
 	std::vector<uint16_t> _clports;
 	std::vector<uint16_t> _srvports;
+	char _addr[ADDRLEN];
+	char _cfg[SUN_PATH];
+	uint16_t _prefix;
 };
 
 class MapUtils
@@ -94,7 +95,7 @@ class CfgUtils
 {
 public:
 	CfgUtils() = default;
-	int parse_cmd(const char *src, int slen, int *dst, int dlen);
+	int parse_cmd(const char *src, int slen, int *dst);
 };
 
 class EventQueue

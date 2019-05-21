@@ -166,6 +166,7 @@ int main(int argc, char *argv[])
 	}
 
 	strncpy(rlparams._cfg, sockpath, SUN_PATH);
+	rlparams._prefix = prefix;
 
 	int flags = LOG_CONS | LOG_PID | LOG_NDELAY | LOG_PERROR;
 	openlog("tcprelay", flags, LOG_LOCAL1);
