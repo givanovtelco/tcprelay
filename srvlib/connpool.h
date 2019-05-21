@@ -6,6 +6,9 @@
 
 #define ADDRLEN 46
 
+/**
+ * Represents tcprelay relation.
+ */
 struct remote
 {
 	int _fd;
@@ -15,6 +18,9 @@ struct remote
 
 struct pool;
 
+/**
+ * Connection pool is epoll implementation as event driven mechanism
+ */
 class ConnPool
 {
 public:

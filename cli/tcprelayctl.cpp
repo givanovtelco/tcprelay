@@ -102,10 +102,11 @@ int main(int argc, char *argv[])
 	fd_set set;
 	struct timeval timeout;
 
+	// handling timeouts response
 	FD_ZERO(&set);
 	FD_SET(fd, &set);
 
-	timeout.tv_sec = 20;
+	timeout.tv_sec = 10;
 	timeout.tv_usec = 0;
 
 	int rv = select(fd + 1, &set, NULL, NULL, &timeout);

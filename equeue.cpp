@@ -46,8 +46,10 @@ EventQueue::EventQueue(const relay& params)
 int EventQueue::init()
 {
 	if ((_evs->_fd = epoll_create1(0)) < 0)
+	{
+		syslog(LOG_ERR, "%s", "Epoll create error");
 		return -1;
-
+	}
 	sigset_t sigset;
 	if (sigemptyset(&sigset))
 		return -1;
@@ -56,21 +58,30 @@ int EventQueue::init()
 	if (sigprocmask(SIG_BLOCK, &sigset, nullptr))
 		return -1;
 	if ((_evs->_sfd = signalfd(-1, &sigset, 0)) < 0)
+	{
+		syslog(LOG_ERR, "%s", "Signal fd create error");
 		return -1;
-
+	}
 	evdata *userdata = new evdata;
 	userdata->_fd = _evs->_sfd;
 	userdata->_state = LISTENER;
 	userdata->_fn = nullptr;
 
 	if (add_event(_evs->_sfd, userdata))
+	{
+		syslog(LOG_ERR, "%s", "Error adding event");
 		return -1;
-
+	}
 	if (init_sockets(_params._srvports))
+	{
+		syslog(LOG_ERR, "%s %s", "Init socket error", strerror(errno));
 		return -1;
-
+	}
 	if (init_config())
+	{
+		syslog(LOG_ERR, "%s %s", "Configuration socket create error", strerror(errno));
 		return -1;
+	}
 
 	return 0;
 }
@@ -135,7 +146,6 @@ EventQueue::~EventQueue()
 
 int EventQueue::conf_listeners(const std::vector<int>& sockets, const std::vector<evdata*>& cbs)
 {
-
 	assert(sockets.size() == cbs.size());
 	int sz = sockets.size();
 	for (int i = 0; i < sz; i++)
@@ -243,6 +253,7 @@ void EventQueue::run()
 			if (fd == _evs->_sfd)
 				return; // exit signal from the main thread.
 
+			// TODO: pull out the error in order to make decision what to do
 			int ret = user->_fn(fd);
 		}
 	}
@@ -384,7 +395,6 @@ int EventQueue::accept_upstream(int fd)
 	in_len = sizeof(in_addr);
 	infd = accept(fd, &in_addr, &in_len);
 
-
 	if (infd < 0)
 		return -1;
 
@@ -395,6 +405,7 @@ int EventQueue::accept_upstream(int fd)
 	if (getsockname(fd, (struct sockaddr *)&sinfo, &len) == -1)
 		return -1;
 	port = htons(sinfo.sin_port);
+	syslog(LOG_INFO, "%s %s", "Upstream accepted from: ", inet_ntoa(sinfo.sin_addr));
 
 	int zero = 1;
 	setsockopt(infd, SOL_SOCKET, SO_ZEROCOPY, &zero, sizeof(zero));
@@ -426,6 +437,9 @@ int EventQueue::accept_upstream(int fd)
 int EventQueue::accept_downstream(int fd)
 {
 	struct sockaddr in_addr;
+	struct sockaddr_in sinfo;
+	socklen_t len = sizeof(sockaddr_in);
+
 	socklen_t in_len;
 	int infd;
 
@@ -437,6 +451,10 @@ int EventQueue::accept_downstream(int fd)
 
 	int zero = 1;
 	setsockopt(infd, SOL_SOCKET, SO_ZEROCOPY, &zero, sizeof(zero));
+
+	if (getsockname(fd, (struct sockaddr *)&sinfo, &len) == -1)
+		return -1;
+	syslog(LOG_INFO, "%s %s", "Downstream accepted from: ", inet_ntoa(sinfo.sin_addr));
 
 	evdata *ev = new evdata;
 	ev->_fd = infd;
