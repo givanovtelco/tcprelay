@@ -47,7 +47,7 @@ int MapUtils::find_dacceptor(int fd)
 	auto it = _lkeys._ldown.find(fd);
 	if (it != _lkeys._ldown.end())
 		return _lsocks._cli[it->second];
-	return 0;
+	return -1;
 }
 
 int MapUtils::find_uacceptor(int fd)
@@ -55,7 +55,7 @@ int MapUtils::find_uacceptor(int fd)
 	auto it = _lkeys._lup.find(fd);
 	if (it != _lkeys._lup.end())
 		return _lsocks._srv[it->second];
-	return 0;
+	return -1;
 }
 
 int MapUtils::add_uacceptor(int fd)

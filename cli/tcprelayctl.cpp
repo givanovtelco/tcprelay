@@ -105,8 +105,8 @@ int main(int argc, char *argv[])
 	FD_ZERO(&set);
 	FD_SET(fd, &set);
 
-	timeout.tv_sec = 0;
-	timeout.tv_usec = 10000;
+	timeout.tv_sec = 20;
+	timeout.tv_usec = 0;
 
 	int rv = select(fd + 1, &set, NULL, NULL, &timeout);
 	char rdbuf[1024];
@@ -118,6 +118,7 @@ int main(int argc, char *argv[])
 		printf("timeout");
 	else
 		rd = read( fd, rdbuf, sizeof(rdbuf) );
+
 	if (rd > 0)
 		fprintf(stdout, "%s", rdbuf);
 

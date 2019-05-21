@@ -1,7 +1,6 @@
 # simple tcprelay project overview
 # Table of Contents
-
-## Problem
-- 2 NAT's 2 peers(web browser and web server) wants to communicate , both of the peers are inside DMZ.
-
-
+* [Problem overview](#problem-overview)
+* [Possible solutions](#possible-solutions)
+   * [Solution 1: Internal protocol](#internal-protocol)
+   * [Solution 2: Predefined connections](#predefined-connections)

@@ -43,6 +43,7 @@ struct connmap
 	std::vector<int> _downstream;
 };
 
+// connection stream keys pointing to the connection map
 struct bdkeys
 {
 	std::unordered_map<int, int> _upkey;
@@ -55,6 +56,7 @@ struct listeners
 	std::vector<int> _cli;
 };
 
+// listenning keys, sockets keys pointing to the listeners map.
 struct lkeys
 {
 	std::unordered_map<int, int> _lup;
@@ -95,7 +97,7 @@ class CfgUtils
 {
 public:
 	CfgUtils() = default;
-	int parse_cmd(const char *src, int slen, int *dst);
+	int parse_cmd(const char *src, int slen);
 };
 
 class EventQueue
@@ -111,8 +113,8 @@ public:
 	int del_event(int fd);
 	int make_nonblocking(int fd);
 private:
-	int init_sockets();
 	int init_config();
+	int init_sockets(const std::vector<uint16_t>& ports);
 	int spawn_listeners(const std::vector<uint16_t>& ports, std::vector<int>& sockets);
 	int conf_listeners(const std::vector<int>& sockets, const std::vector<evdata*>& cbs);
 	int spawn_client(uint16_t port);

@@ -101,19 +101,6 @@ int main(int argc, char *argv[])
 	if (!inet_pton(AF_INET, rlparams._addr, &(sa.sin_addr)))
 		help();
 
-//	pid_t pid;
-//
-//	pid = fork();
-//
-//	if (pid < 0)
-//		exit(EXIT_FAILURE);
-//
-//	if (pid > 0)
-//		exit(EXIT_SUCCESS);
-//
-//	if (setsid() < 0)
-//		exit(EXIT_FAILURE);
-
 	struct sigaction l_sa;
 
 	l_sa.sa_handler = &sig_handler;
@@ -131,27 +118,6 @@ int main(int argc, char *argv[])
 
 	// ignore SIGPIPE
 	signal(SIGPIPE, SIG_IGN);
-
-//	pid = fork();
-//
-//	if (pid < 0)
-//		exit(EXIT_FAILURE);
-//
-//	if (pid > 0)
-//		exit(EXIT_SUCCESS);
-
-	/* Set new file permissions */
-	umask(0);
-
-	/* TODO: chroot daemon. Change the working directory to the root directory */
-	/* or another appropriated directory */
-	chdir("/");
-
-	/* Close all open file descriptors */
-	for (int x = sysconf(_SC_OPEN_MAX); x >= 0; x--)
-	{
-		close(x);
-	}
 
 	const char sep[2] = ",";
 	char *tok;

@@ -65,7 +65,7 @@ int EventQueue::init()
 	if (add_event(_evs->_sfd, userdata))
 		return -1;
 
-	if (init_sockets())
+	if (init_sockets(_params._srvports))
 		return -1;
 
 	if (init_config())
@@ -102,10 +102,10 @@ int EventQueue::init_config()
 	return 0;
 }
 
-int EventQueue::init_sockets()
+int EventQueue::init_sockets(const std::vector<uint16_t>& ports)
 {
 	std::vector<int> srvfds;
-	if (spawn_listeners(_params._srvports, srvfds))
+	if (spawn_listeners(ports, srvfds))
 		return -1;
 
 	std::vector<evdata*> cbs;
@@ -230,12 +230,12 @@ void EventQueue::run()
 			else
 				fd = ev.data.fd;
 
-			if (ev.events & EPOLLERR ||
-					ev.events & EPOLLHUP ||
+			if (ev.events & EPOLLRDHUP ||
 					(!ev.events & EPOLLIN) )
 			{
 				// TODO: unmap connection
-				shutdown(fd, SHUT_RDWR);
+				close(fd);
+				del_event(fd);
 				continue;
 			}
 
@@ -243,11 +243,6 @@ void EventQueue::run()
 				return; // exit signal from the main thread.
 
 			int ret = user->_fn(fd);
-			if (ret < 0)
-			{
-				del_event(fd);
-				delete user;
-			}
 		}
 	}
 }
@@ -264,7 +259,7 @@ int EventQueue::add_event(int fd,  evdata* data)
 	else
 		ev.data.fd = fd;
 
-	ev.events = EPOLLIN | EPOLLET;
+	ev.events = EPOLLIN | EPOLLET | EPOLLRDHUP;
 	return epoll_ctl(_evs->_fd, EPOLL_CTL_ADD, fd, &ev);
 }
 
@@ -304,26 +299,48 @@ int EventQueue::make_nonblocking(int fd)
 int EventQueue::cfg_execute(int fd)
 {
 	char buf[1024];
+	char resp[5];
+
 	memset(buf, 0, sizeof(buf));
-	int bytes = recv(fd, buf, sizeof(buf), MSG_DONTWAIT);
+	int bytes = recv(fd, buf, sizeof(buf), 0);
 	if (bytes < 0 )
 		return -1;
 	if (bytes == 0)
 		return -1;
 
 	int port;
-	if (!_cutils.parse_cmd(buf, sizeof(buf), &port))
-	{
-		if (isdigit(port))
-		{
-			//spawn_client(port);
-			int pport = port + _params._prefix;
-			// TODO: spawn serverport, persist client port.
+	if ((port = _cutils.parse_cmd(buf, sizeof(buf))) == -1)
+		return -1;
 
-		}
+	std::vector<uint16_t> ports;
+	std::vector<int> sockets;
+	std::vector<evdata *> cbs;
+
+	ports.push_back(port);
+	if (spawn_listeners(ports, sockets))
+	{
+		snprintf(resp, 4, "%s", "NOK");
+		send(fd, resp, sizeof(resp), 0);
+		return -1;
+	}
+	evdata *event = new evdata;
+	event->_fd = sockets[0];
+	event->_state = LISTENER;
+	event->_fn = [this](int arg) -> int {
+		return this->accept_upstream(arg);
+	};
+	cbs.push_back(event);
+	if (conf_listeners(sockets, cbs))
+	{
+		snprintf(resp, 4, "%s", "NOK");
+		send(fd, resp, sizeof(resp), 0);
+		return -1;
 	}
 
-	return -1;
+	snprintf(resp, 3, "%s", "OK");
+	send(fd, resp, sizeof(resp), 0);
+
+	return 0;
 }
 
 int EventQueue::cfg_accept(int fd)
@@ -387,8 +404,8 @@ int EventQueue::accept_upstream(int fd)
 	if (add_event(infd, ev))
 		return -1;
 
-	if (_mutils.find_downstream(infd))
-		spawn_client(port);
+	if (_mutils.find_dacceptor(infd))
+		spawn_client(port - _params._prefix);
 
 	return 0;
 }
@@ -424,31 +441,31 @@ int EventQueue::accept_downstream(int fd)
 
 int EventQueue::forward_upstream(int fd)
 {
-	auto res = _tpool->push([this](int fd) mutable {
+//	auto res = _tpool->push([this](int fd) mutable {
 		int upfd = -1;
-		if ((upfd  = _mutils.add_upstream(fd)) == -1)
+		if ((upfd  = _mutils.find_upstream(fd)) == -1)
 			return -1;
 		if (do_forward(fd, upfd))
 			return -1;
 		return 0;
-	}, fd);
+	//}, fd);
 
-	return res.get();
+	//return res.get();
 }
 
 int EventQueue::forward_downstream(int fd)
 {
-	auto res = _tpool->push([this](int fd) mutable {
+	//auto res = _tpool->push([this](int fd) mutable {
 		int downfd = -1;
-		if ((downfd  = _mutils.add_upstream(fd)) == -1)
+		if ((downfd  = _mutils.find_downstream(fd)) == -1)
 			return -1;
 
 		if (do_forward(fd, downfd))
 			return -1;
 
 		return 0;
-	}, fd);
-	return res.get();
+	//}, fd);
+	//return res.get();
 }
 
 int EventQueue::do_forward(int src, int dst)

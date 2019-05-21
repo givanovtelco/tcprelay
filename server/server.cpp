@@ -98,7 +98,7 @@ int main(int argc, char *argv[])
 	signal(SIGPIPE, SIG_IGN);
 
 	ConnPool pool(rem, maxconn);
-	if (!pool.init())
+	if (pool.init())
 		return -1;
 
 	std::function<void (int)> fn = [](int fd) {
