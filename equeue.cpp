@@ -441,21 +441,21 @@ int EventQueue::accept_downstream(int fd)
 
 int EventQueue::forward_upstream(int fd)
 {
-//	auto res = _tpool->push([this](int fd) mutable {
+	auto res = _tpool->push([this](int fd) mutable {
 		int upfd = -1;
 		if ((upfd  = _mutils.find_upstream(fd)) == -1)
 			return -1;
 		if (do_forward(fd, upfd))
 			return -1;
 		return 0;
-	//}, fd);
+	}, fd);
 
-	//return res.get();
+	return res.get();
 }
 
 int EventQueue::forward_downstream(int fd)
 {
-	//auto res = _tpool->push([this](int fd) mutable {
+	auto res = _tpool->push([this](int fd) mutable {
 		int downfd = -1;
 		if ((downfd  = _mutils.find_downstream(fd)) == -1)
 			return -1;
@@ -464,8 +464,8 @@ int EventQueue::forward_downstream(int fd)
 			return -1;
 
 		return 0;
-	//}, fd);
-	//return res.get();
+	}, fd);
+	return res.get();
 }
 
 int EventQueue::do_forward(int src, int dst)
