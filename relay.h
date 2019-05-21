@@ -94,7 +94,7 @@ class CfgUtils
 {
 public:
 	CfgUtils() = default;
-	int parse_cmd(const char *src, int slen, char *dst, int dlen);
+	int parse_cmd(const char *src, int slen, int *dst, int dlen);
 };
 
 class EventQueue

@@ -6,6 +6,8 @@
 #include <fcntl.h>
 #include <string.h>
 #include <errno.h>
+#include <sys/types.h>
+#include <sys/select.h>
 
 static void help()
 {
@@ -95,6 +97,28 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "%s\n", strerror(errno));
 		return -1;
 	}
+
+	fd_set set;
+	struct timeval timeout;
+
+	FD_ZERO(&set);
+	FD_SET(fd, &set);
+
+	timeout.tv_sec = 0;
+	timeout.tv_usec = 10000;
+
+	int rv = select(fd + 1, &set, NULL, NULL, &timeout);
+	char rdbuf[1024];
+	int rd = 0;
+
+	if(rv == -1)
+		perror("select");
+	else if(rv == 0)
+		printf("timeout");
+	else
+		rd = read( fd, rdbuf, sizeof(rdbuf) );
+	if (rd > 0)
+		fprintf(stdout, "%s", rdbuf);
 
 	close(fd);
 

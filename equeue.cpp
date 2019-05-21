@@ -311,7 +311,7 @@ int EventQueue::cfg_execute(int fd)
 	if (bytes == 0)
 		return -1;
 
-	char out[1024];
+	int out[1024];
 	if (!_cutils.parse_cmd(buf, sizeof(buf), out, sizeof(out)))
 	{
 		int sz = sizeof(out);
@@ -325,7 +325,7 @@ int EventQueue::cfg_execute(int fd)
 		}
 	}
 
-	return 0;
+	return -1;
 }
 
 int EventQueue::cfg_accept(int fd)

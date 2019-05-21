@@ -1,7 +1,8 @@
 #include <string.h>
+#include <stdlib.h>
 #include "relay.h"
 
-int CfgUtils::parse_cmd(const char *src, int slen, char *dst, int dlen)
+int CfgUtils::parse_cmd(const char *src, int slen, int *dst, int dlen)
 {
 
 	if (!src || !dst)
@@ -9,8 +10,9 @@ int CfgUtils::parse_cmd(const char *src, int slen, char *dst, int dlen)
 
 	char cmd[3];
 	char ports[dlen];
+	memset(ports, 0, sizeof(ports));
 
-	if (sscanf(src, "%s,%s", cmd, ports) != 2)
+	if (sscanf(src, "%s %s", cmd, ports) != 2)
 		return -1;
 
 	if (strcmp(cmd, "add"))
@@ -24,11 +26,13 @@ int CfgUtils::parse_cmd(const char *src, int slen, char *dst, int dlen)
 	{
 		if (idx < dlen)
 		{
-			dst[idx] = *tok;
+			dst[idx] = atoi(tok);
 			tok = strtok(NULL, sep);
 			idx++;
 		}
 	}
+
+	dst[idx++] = '\0';
 
 	return 0;
 }
