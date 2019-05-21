@@ -18,6 +18,7 @@
 
 #include <array>
 #include <cassert>
+#include <memory>
 
 #include "relay.h"
 #include "threadpool.h"
@@ -183,7 +184,7 @@ int EventQueue::spawn_listeners(const std::vector<uint16_t>& ports, std::vector<
 	struct sockaddr_in saddr;
 	memset(&saddr, 0, sizeof(sockaddr_in));
 	saddr.sin_family = AF_INET;
-	saddr.sin_addr.s_addr = inet_addr(_params._addr);
+	inet_aton(_params._addr, &saddr.sin_addr);
 
 	int sz = ports.size();
 
@@ -299,7 +300,6 @@ int EventQueue::make_nonblocking(int fd)
 int EventQueue::cfg_execute(int fd)
 {
 	char buf[1024];
-	char resp[5];
 
 	memset(buf, 0, sizeof(buf));
 	int bytes = recv(fd, buf, sizeof(buf), 0);
@@ -312,11 +312,22 @@ int EventQueue::cfg_execute(int fd)
 	if ((port = _cutils.parse_cmd(buf, sizeof(buf))) == -1)
 		return -1;
 
-	std::vector<uint16_t> ports;
-	std::vector<int> sockets;
+	if (cfg_helper(port, fd))
+		return -1;
+	return 0;
+}
+
+int EventQueue::cfg_helper(int port, int fd)
+{
+	std::vector<uint16_t>  ports;
+	std::vector<int>  sockets;
 	std::vector<evdata *> cbs;
 
 	ports.push_back(port);
+
+	if (init_sockets(ports))
+		return -1;
+	char resp[5];
 	if (spawn_listeners(ports, sockets))
 	{
 		snprintf(resp, 4, "%s", "NOK");
@@ -329,7 +340,9 @@ int EventQueue::cfg_execute(int fd)
 	event->_fn = [this](int arg) -> int {
 		return this->accept_upstream(arg);
 	};
+
 	cbs.push_back(event);
+
 	if (conf_listeners(sockets, cbs))
 	{
 		snprintf(resp, 4, "%s", "NOK");

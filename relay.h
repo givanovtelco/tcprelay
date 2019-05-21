@@ -15,21 +15,15 @@
 struct events;
 class ThreadPool;
 
-enum error
-{
-	UPSTREAM_DOWN,
-	DOWNSTREAM_DOWN,
-	UNKNOWN_LISTENER,
-	INTERNAL_ERROR,
-};
-
 enum evstate
 {
 	LISTENER = 1 << 0,
 	PRODUCER = 1 << 1,
-
 };
 
+/**
+ * Event data structure.
+ */
 struct evdata
 {
 	int _fd;
@@ -37,32 +31,45 @@ struct evdata
 	std::function<int (int)> _fn;
 };
 
+/**
+ * The actual stream mapping
+ */
 struct connmap
 {
 	std::vector<int> _upstream;
 	std::vector<int> _downstream;
 };
 
-// connection stream keys pointing to the connection map
+/**
+ * Bi-directional keys pointing to the stream connections.
+ */
 struct bdkeys
 {
 	std::unordered_map<int, int> _upkey;
 	std::unordered_map<int, int> _downkey;
 };
 
+/**
+ * Listener sockets.
+ */
 struct listeners
 {
 	std::vector<int> _srv;
 	std::vector<int> _cli;
 };
 
-// listenning keys, sockets keys pointing to the listeners map.
+/**
+ * Listener keys.
+ */
 struct lkeys
 {
 	std::unordered_map<int, int> _lup;
 	std::unordered_map<int, int> _ldown;
 };
 
+/**
+ * this struct represents initial params.
+ */
 struct relay
 {
 	std::vector<uint16_t> _clports;
@@ -72,6 +79,9 @@ struct relay
 	uint16_t _prefix;
 };
 
+/**
+ * This class represents mapping between stream connections and listeners.
+ */
 class MapUtils
 {
 public:
@@ -93,12 +103,19 @@ private:
 	lkeys _lkeys;
 };
 
+/**
+ * This class is used to parse request from unix domain socket.
+ */
 class CfgUtils
 {
 public:
 	CfgUtils() = default;
 	int parse_cmd(const char *src, int slen);
 };
+
+/*
+ * This class represents epoll handling.
+ */
 
 class EventQueue
 {
@@ -125,6 +142,7 @@ private:
 	int forward_downstream(int fd);
 	int do_forward(int src, int dst);
 	int cfg_execute(int fd);
+	int cfg_helper(int port, int fd);
 	int cfg_accept(int fd);
 private:
 	int _cfd;
