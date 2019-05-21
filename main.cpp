@@ -169,11 +169,15 @@ int main(int argc, char *argv[])
 
 	strncpy(rlparams._cfg, sockpath, SUN_PATH);
 
+	int flags = LOG_CONS | LOG_PID | LOG_NDELAY | LOG_PERROR;
+	openlog("tcprelay", flags, LOG_LOCAL1);
+
 	EventQueue queue(rlparams);
 	if (queue.init())
 		return -1;
 
-	queue.dispatch();
+	queue.run();
+	closelog();
 
 	return 0;
 }

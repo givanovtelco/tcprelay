@@ -81,8 +81,8 @@ public:
 	int add_dacceptor(int fd);
 	int add_downstream(int fd);
 	int add_upstream(int fd);
-	int del_upstream(int fd);
-	int del_downstream(int fd);
+	void del_upstream(int fd);
+	void del_downstream(int fd);
 private:
 	listeners _lsocks;
 	connmap _map;
@@ -104,10 +104,10 @@ public:
 	~EventQueue();
 	int init();
 	// infinite loop
-	void dispatch();
+	void run();
 	void stop();
 	int add_event(int fd, evdata* udata);
-	int destroy_event(int fd_event);
+	int del_event(int fd);
 	int make_nonblocking(int fd);
 private:
 	int init_sockets();
@@ -121,6 +121,7 @@ private:
 	int forward_upstream(int fd);
 	int forward_downstream(int fd);
 	int do_forward(int src, int dst);
+	void cfg_execute(int fd);
 private:
 	int _cfd;
 	std::queue<int> _cpending;

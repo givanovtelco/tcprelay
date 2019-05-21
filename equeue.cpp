@@ -14,6 +14,8 @@
 #include <sys/sendfile.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <syslog.h>
+
 #include <array>
 #include <cassert>
 
@@ -136,6 +138,35 @@ int EventQueue::conf_listeners(const std::vector<int>& sockets, const std::vecto
 
 int EventQueue::spawn_client(uint16_t port)
 {
+	struct sockaddr_in saddr;
+	memset(&saddr, 0, sizeof(sockaddr_in));
+	saddr.sin_family = AF_INET;
+	saddr.sin_addr.s_addr = inet_addr(_params._addr);
+	saddr.sin_port = htons(port);
+
+	int sock = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, IPPROTO_TCP);
+	if (sock < 0)
+		return -1;
+	int opt = 1;
+	setsockopt(sock, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt));
+	if (bind(sock, (struct sockaddr *)&saddr, sizeof(saddr)))
+	{
+		syslog(LOG_ERR, "%s\n", strerror(errno));
+		return -1;
+	}
+	if (listen(sock, 1024))
+		return -1;
+
+	evdata *event = new evdata;
+	event->_fd = sock;
+	event->_state = LISTENER;
+	event->_fn = [this](int arg) -> int {
+		return this->accept_downstream(arg);
+	};
+
+	if (add_event(sock, event))
+		return -1;
+
 	return 0;
 }
 
@@ -160,7 +191,10 @@ int EventQueue::spawn_listeners(const std::vector<uint16_t>& ports, std::vector<
 
 		saddr.sin_port = htons(ports[i]);
 		if (bind(sock, (struct sockaddr *)&saddr, sizeof(saddr)))
+		{
+			syslog(LOG_ERR, "%s", strerror(errno));
 			return -1;
+		}
 
 		if (listen(sock, 1024))
 			return -1;
@@ -171,51 +205,65 @@ int EventQueue::spawn_listeners(const std::vector<uint16_t>& ports, std::vector<
 	return 0;
 }
 
-void EventQueue::dispatch()
+void EventQueue::run()
 {
-	int idx, num;
-	num = epoll_wait(_evs->_fd, _evs->_maxev.begin(), MAX_EVENTS, -1);
-
-	for (int i = 0; i < num; i++)
+	while (1)
 	{
-		epoll_event ev = _evs->_maxev[i];
-		evdata *user = (evdata*)ev.data.ptr;
+		int idx, num;
+		num = epoll_wait(_evs->_fd, _evs->_maxev.begin(), MAX_EVENTS, -1);
 
-		int fd;
-		if (user)
-			fd = user->_fd;
-		else
-			fd = ev.data.fd;
-
-		if (ev.events & EPOLLERR ||
-				ev.events & EPOLLHUP ||
-				(!ev.events & EPOLLIN) )
+		for (int i = 0; i < num; i++)
 		{
-			// TODO: unmap connection
-			shutdown(fd, SHUT_RDWR);
-			continue;
-		}
+			epoll_event ev = _evs->_maxev[i];
+			evdata *user = (evdata*)ev.data.ptr;
 
-		if (fd == _evs->_sfd)
-			return; // exit signal from the main thread.
+			int fd;
+			if (user)
+				fd = user->_fd;
+			else
+				fd = ev.data.fd;
 
-		if (fd == _cfd)
-		{
-			int cfd = accept(_cfd, NULL, NULL);
-			if (cfd < 0)
+			if (ev.events & EPOLLERR ||
+					ev.events & EPOLLHUP ||
+					(!ev.events & EPOLLIN) )
+			{
+				// TODO: unmap connection
+				shutdown(fd, SHUT_RDWR);
 				continue;
-			add_event(cfd, nullptr);
-			_cpending.push(cfd);
-		}
+			}
 
-		int ret = user->_fn(fd);
-		if (ret < 0)
-		{
-			destroy_event(fd);
-			delete user;
+			// process cfg requests if any
+			while (!_cpending.empty())
+			{
+				int cfgfd = _cpending.front();
+				if (cfgfd != fd)
+					break;
+				cfg_execute(fd);
+				_cpending.pop();
+			}
+
+			if (fd == _evs->_sfd)
+				return; // exit signal from the main thread.
+
+			if (fd == _cfd)
+			{
+				int cfd = accept(_cfd, NULL, NULL);
+				if (cfd < 0)
+					continue;
+				add_event(cfd, nullptr);
+				_cpending.push(cfd);
+			}
+
+			int ret = user->_fn(fd);
+			if (ret < 0)
+			{
+				del_event(fd);
+				delete user;
+			}
 		}
 	}
 }
+
 
 int EventQueue::add_event(int fd,  evdata* data)
 {
@@ -226,15 +274,15 @@ int EventQueue::add_event(int fd,  evdata* data)
 	return epoll_ctl(_evs->_fd, EPOLL_CTL_ADD, fd, &ev);
 }
 
-int EventQueue::destroy_event(int fd_event)
+int EventQueue::del_event(int fd)
 {
-	return epoll_ctl(_evs->_fd, EPOLL_CTL_DEL, fd_event, &_evs->_ev);
+	return epoll_ctl(_evs->_fd, EPOLL_CTL_DEL, fd, &_evs->_ev);
 }
 
 void EventQueue::stop()
 {
 	for (auto &elem : _evs->_maxev) {
-		destroy_event(elem.data.fd);
+		del_event(elem.data.fd);
 		if (elem.data.ptr)
 			delete static_cast<evdata*>(elem.data.ptr);
 	}
@@ -257,6 +305,29 @@ int EventQueue::make_nonblocking(int fd)
 		return -1;
 
 	return 0;
+}
+
+void EventQueue::cfg_execute(int fd)
+{
+	char buf[1024];
+	memset(buf, 0, sizeof(buf));
+	int bytes = recv(fd, buf, sizeof(buf), 0);
+	if (bytes < 0 )
+		return;
+
+	char out[1024];
+	if (!_cutils.parse_cmd(buf, sizeof(buf), out, sizeof(out)))
+	{
+		int sz = sizeof(out);
+		for (int i = 0; i < sz; i++)
+		{
+			int c = out[i];
+			if (isdigit(c))
+			{
+				spawn_client(c);
+			}
+		}
+	}
 }
 
 int EventQueue::accept_upstream(int fd)
