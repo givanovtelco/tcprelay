@@ -305,8 +305,10 @@ int EventQueue::cfg_execute(int fd)
 {
 	char buf[1024];
 	memset(buf, 0, sizeof(buf));
-	int bytes = recv(fd, buf, sizeof(buf), 0);
+	int bytes = recv(fd, buf, sizeof(buf), MSG_DONTWAIT);
 	if (bytes < 0 )
+		return -1;
+	if (bytes == 0)
 		return -1;
 
 	char out[1024];
@@ -332,9 +334,10 @@ int EventQueue::cfg_accept(int fd)
 	if (cfd < 0)
 		return -1;
 	evdata *ev =  new evdata;
-	ev->_fd = fd;
+	ev->_fd = cfd;
 	ev->_state = PRODUCER;
 	ev->_fn = [this](int arg) -> int { return this->cfg_execute(arg); };
+
 	if (add_event(cfd, ev))
 		return -1;
 
@@ -473,6 +476,8 @@ int EventQueue::do_forward(int src, int dst)
 	int len = recvmsg(src, &msg, 0);
 
 	if (len == -1)
+		return -1;
+	if (len == 0)
 		return -1;
 
 	if (sendmsg(dst, &msg, MSG_ZEROCOPY) == -1)
