@@ -8,25 +8,26 @@ int CfgUtils::parse_cmd(const char *src, int slen, char *dst, int dlen)
 		return -1;
 
 	char cmd[3];
-	int pos = 0, length = 3;
+	char ports[dlen];
 
-	while (pos < length)
-	{
-		cmd[pos] = src[pos+length-1];
-		pos++;
-	}
-
-	if (strncmp(cmd, "ADD", sizeof(cmd)))
+	if (sscanf(src, "%s,%s", cmd, ports) != 2)
 		return -1;
 
-	for (int idx = 2, j = 0; idx < slen; idx++)
+	if (strcmp(cmd, "add"))
+		return -1;
+
+	char sep[2] = ",";
+	char *tok = strtok(ports, sep);
+
+	int idx = 0;
+	while(tok != NULL)
 	{
-		if (!isspace(src[idx]))
-			continue;
-		if (!isdigit(src[idx]))
-			continue;
-		dst[j] = src[idx];
-		j++;
+		if (idx < dlen)
+		{
+			dst[idx] = *tok;
+			tok = strtok(NULL, sep);
+			idx++;
+		}
 	}
 
 	return 0;

@@ -90,7 +90,14 @@ int EventQueue::init_config()
 	if (listen(_cfd, 1) == -1)
 		return -1;
 
-	add_event(_cfd, nullptr);
+	evdata *event = new evdata;
+	event->_fd = _cfd;
+	event->_state = LISTENER;
+	event->_fn = [this](int arg) -> int {
+		return this->cfg_accept(arg);
+	};
+
+	add_event(_cfd, event);
 
 	return 0;
 }
@@ -232,27 +239,8 @@ void EventQueue::run()
 				continue;
 			}
 
-			// process cfg requests if any
-			while (!_cpending.empty())
-			{
-				int cfgfd = _cpending.front();
-				if (cfgfd != fd)
-					break;
-				cfg_execute(fd);
-				_cpending.pop();
-			}
-
 			if (fd == _evs->_sfd)
 				return; // exit signal from the main thread.
-
-			if (fd == _cfd)
-			{
-				int cfd = accept(_cfd, NULL, NULL);
-				if (cfd < 0)
-					continue;
-				add_event(cfd, nullptr);
-				_cpending.push(cfd);
-			}
 
 			int ret = user->_fn(fd);
 			if (ret < 0)
@@ -269,7 +257,13 @@ int EventQueue::add_event(int fd,  evdata* data)
 {
 	make_nonblocking(fd);
 	struct epoll_event ev;
-	ev.data.ptr = data;
+	memset(&ev, 0, sizeof(epoll_event));
+
+	if (data)
+		ev.data.ptr = data;
+	else
+		ev.data.fd = fd;
+
 	ev.events = EPOLLIN | EPOLLET;
 	return epoll_ctl(_evs->_fd, EPOLL_CTL_ADD, fd, &ev);
 }
@@ -307,13 +301,13 @@ int EventQueue::make_nonblocking(int fd)
 	return 0;
 }
 
-void EventQueue::cfg_execute(int fd)
+int EventQueue::cfg_execute(int fd)
 {
 	char buf[1024];
 	memset(buf, 0, sizeof(buf));
 	int bytes = recv(fd, buf, sizeof(buf), 0);
 	if (bytes < 0 )
-		return;
+		return -1;
 
 	char out[1024];
 	if (!_cutils.parse_cmd(buf, sizeof(buf), out, sizeof(out)))
@@ -328,6 +322,23 @@ void EventQueue::cfg_execute(int fd)
 			}
 		}
 	}
+
+	return 0;
+}
+
+int EventQueue::cfg_accept(int fd)
+{
+	int cfd = accept(fd, NULL, NULL);
+	if (cfd < 0)
+		return -1;
+	evdata *ev =  new evdata;
+	ev->_fd = fd;
+	ev->_state = PRODUCER;
+	ev->_fn = [this](int arg) -> int { return this->cfg_execute(arg); };
+	if (add_event(cfd, ev))
+		return -1;
+
+	return 0;
 }
 
 int EventQueue::accept_upstream(int fd)

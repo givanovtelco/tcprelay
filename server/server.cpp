@@ -1,12 +1,30 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <signal.h>
+#include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 
 #include "connpool.h"
 
 #define BUFFER_SIZE 1024
+
+static void sig_handler(int signum)
+{
+	switch(signum)
+	{
+	case SIGINT:
+	case SIGHUP:
+	{
+		// sending signal to the event queue.
+		kill(getpid(), SIGUSR1);
+	}
+	break;
+	default:
+		break;
+	}
+}
 
 static void help()
 {
@@ -33,7 +51,6 @@ static void help()
 
 int main(int argc, char *argv[])
 {
-
 	uint16_t port = 0;
 	int maxconn = 1024;
 	const char *address = NULL;
@@ -61,6 +78,24 @@ int main(int argc, char *argv[])
 	remote rem;
 	rem._port = port;
 	strncpy(rem._addr, address, sizeof(rem._addr));
+
+	struct sigaction l_sa;
+
+	l_sa.sa_handler = &sig_handler;
+	// Restart the system call, if at all possible
+	l_sa.sa_flags = SA_RESTART;
+
+	// Block every signal during the handler
+	sigfillset(&l_sa.sa_mask);
+
+	if (sigaction(SIGHUP, &l_sa, NULL) == -1)
+		perror("Error: cannot handle SIGHUP.\n");
+
+	if (sigaction(SIGINT, &l_sa, NULL) == -1)
+		perror("Error: cannot handle SIGINT.\n");
+
+	// ignore SIGPIPE
+	signal(SIGPIPE, SIG_IGN);
 
 	ConnPool pool(rem, maxconn);
 	if (!pool.init())

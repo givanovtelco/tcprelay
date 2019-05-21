@@ -123,13 +123,11 @@ int main(int argc, char *argv[])
 	// Block every signal during the handler
 	sigfillset(&l_sa.sa_mask);
 
-	if (sigaction(SIGHUP, &l_sa, NULL) == -1) {
+	if (sigaction(SIGHUP, &l_sa, NULL) == -1)
 		perror("Error: cannot handle SIGHUP.\n");
-	}
 
-	if (sigaction(SIGINT, &l_sa, NULL) == -1) {
+	if (sigaction(SIGINT, &l_sa, NULL) == -1)
 		perror("Error: cannot handle SIGINT.\n");
-	}
 
 	// ignore SIGPIPE
 	signal(SIGPIPE, SIG_IGN);

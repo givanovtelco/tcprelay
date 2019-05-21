@@ -121,10 +121,10 @@ private:
 	int forward_upstream(int fd);
 	int forward_downstream(int fd);
 	int do_forward(int src, int dst);
-	void cfg_execute(int fd);
+	int cfg_execute(int fd);
+	int cfg_accept(int fd);
 private:
 	int _cfd;
-	std::queue<int> _cpending;
 	events *_evs;
 	ThreadPool *_tpool;
 	relay _params;
