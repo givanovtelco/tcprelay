@@ -264,7 +264,6 @@ int EventQueue::add_event(int fd,  evdata* data)
 {
 	make_nonblocking(fd);
 	struct epoll_event ev;
-	memset(&ev, 0, sizeof(epoll_event));
 
 	if (data)
 		ev.data.ptr = data;
@@ -330,30 +329,12 @@ int EventQueue::cfg_execute(int fd)
 
 int EventQueue::cfg_helper(int port, int fd)
 {
-	std::vector<int>  sockets(0);
-	std::vector<evdata *> cbs(0);
 	std::vector<uint16_t> ports(0);
 
 	ports.push_back(port);
 
 	char resp[5];
-	if (spawn_listeners(ports, sockets))
-	{
-		snprintf(resp, 4, "%s", "NOK");
-		send(fd, resp, sizeof(resp), 0);
-		return -1;
-	}
-
-	evdata *event = new evdata;
-	event->_fd = sockets[0];
-	event->_state = LISTENER;
-	event->_fn = [this](int arg) -> int {
-		return this->accept_upstream(arg);
-	};
-
-	cbs.push_back(event);
-
-	if (conf_listeners(sockets, cbs))
+	if (init_sockets(ports))
 	{
 		snprintf(resp, 4, "%s", "NOK");
 		send(fd, resp, sizeof(resp), 0);
