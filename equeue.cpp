@@ -330,14 +330,12 @@ int EventQueue::cfg_execute(int fd)
 
 int EventQueue::cfg_helper(int port, int fd)
 {
-	std::vector<uint16_t>  ports;
-	std::vector<int>  sockets;
-	std::vector<evdata *> cbs;
+	std::vector<int>  sockets(0);
+	std::vector<evdata *> cbs(0);
+	std::vector<uint16_t> ports(0);
 
 	ports.push_back(port);
 
-	if (init_sockets(ports))
-		return -1;
 	char resp[5];
 	if (spawn_listeners(ports, sockets))
 	{
@@ -345,6 +343,7 @@ int EventQueue::cfg_helper(int port, int fd)
 		send(fd, resp, sizeof(resp), 0);
 		return -1;
 	}
+
 	evdata *event = new evdata;
 	event->_fd = sockets[0];
 	event->_state = LISTENER;
