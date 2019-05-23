@@ -142,6 +142,7 @@ EventQueue::~EventQueue()
 {
 	stop();
 	delete _evs;
+	delete _tpool;
 }
 
 int EventQueue::conf_listeners(const std::vector<int>& sockets, const std::vector<evdata*>& cbs)
