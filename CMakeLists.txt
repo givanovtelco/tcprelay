@@ -7,8 +7,11 @@ set (tcprelay_VERSION_MAJOR 1)
 set (tcprelay_VERSION_MINOR 0)
 
 SET(CMAKE_CXX_COMPILER /usr/bin/c++)  
+SET(CFLAGS "-Wall -fstack-protector")
 
 find_package (Threads)
+
+add_definitions(${CFLAGS})
 
 add_executable(tcprelay main.cpp equeue.cpp maputils.cpp threadpool.cpp cfg.cpp)
 target_link_libraries (tcprelay ${CMAKE_THREAD_LIBS_INIT})

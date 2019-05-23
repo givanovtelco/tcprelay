@@ -9,7 +9,7 @@ int CfgUtils::parse_cmd(const char *src, int slen)
 	if (!src)
 		return -1;
 
-	char cmd[3];
+	char cmd[4];
 	int port = -1;
 	if (sscanf(src, "%s %d", cmd, &port) != 2)
 	{
