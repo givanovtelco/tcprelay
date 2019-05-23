@@ -228,7 +228,7 @@ void EventQueue::run()
 {
 	while (1)
 	{
-		int idx, num;
+		int num;
 		num = epoll_wait(_evs->_fd, _evs->_maxev.begin(), MAX_EVENTS, -1);
 
 		for (int i = 0; i < num; i++)
@@ -243,7 +243,7 @@ void EventQueue::run()
 				fd = ev.data.fd;
 
 			if (ev.events & EPOLLRDHUP ||
-					(!ev.events & EPOLLIN) )
+					(!(ev.events & EPOLLIN)) )
 			{
 				// TODO: unmap connection
 				close(fd);
@@ -483,7 +483,6 @@ int EventQueue::forward_downstream(int fd)
 int EventQueue::do_forward(int src, int dst)
 {
 	char buf[MAX_BUFF];
-	struct cmsghdr *cmsg;
 	struct msghdr msg;
 	struct iovec vec[1];
 	struct sockaddr_in sin;

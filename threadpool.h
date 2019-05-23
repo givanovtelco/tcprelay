@@ -13,8 +13,8 @@ class ThreadPool {
 private:
     class ThreadWorker {
     private:
-        int _id;
         ThreadPool * _pool;
+	int _id;
     public:
         ThreadWorker(ThreadPool * pool, const int id)
             : _pool(pool), _id(id) {
@@ -22,7 +22,6 @@ private:
         
         void operator()() {
             std::function<void ()> func;
-            bool pop;
             while (!_pool->_shutdown) {
                 {
                     std::unique_lock<std::mutex> lock(_pool->_conditional_mutex);
